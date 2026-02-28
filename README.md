@@ -1,6 +1,6 @@
 ## Hi there 👋
 ### This is Krish !
-
+- I'm Currently woking on [Supply Chain Forecasting and Optimization](https://github.com/Krish-kunjadiya/Supplychain_Forecasting_and_Optimization) Project
 <!--
 **Krish-kunjadiya/Krish-kunjadiya** is a ✨ _special_ ✨ repository because its `README.md` (this file) appears on your GitHub profile.
 
