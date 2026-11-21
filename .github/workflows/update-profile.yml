@@ -2,7 +2,7 @@ name: Update profile
 
 on:
   schedule:
-    - cron: "23 0 * * *" # every day at 00:23 UTC
+    - cron: "35 18 * * *" # every day at 00:05 IST (18:35 UTC)
   workflow_dispatch:
   push:
     branches: [master]

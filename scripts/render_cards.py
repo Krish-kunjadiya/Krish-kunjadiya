@@ -218,7 +218,7 @@ def hero(config):
     return label
 
 
-def heatmap(data):
+def heatmap(config, data):
     days = data["days"]
     first = dt.date.fromisoformat(days[0]["date"])
     lead = (first.weekday() + 1) % 7
@@ -250,7 +250,8 @@ def heatmap(data):
         f'<rect x="{legend_x + i * 14}" y="{legend_y}" width="11" height="11" rx="2.5" fill="{color}"/>'
         for i, color in enumerate(HEAT)
     )
-    updated = dt.datetime.fromisoformat(data["updated_at"].replace("Z", "+00:00"))
+    local_time = dt.timezone(dt.timedelta(minutes=config["utc_offset_minutes"]))
+    updated = dt.datetime.fromisoformat(data["updated_at"].replace("Z", "+00:00")).astimezone(local_time)
     stamp = f"UPDATED {updated.day} {updated.strftime('%b %Y').upper()}"
     height = gy + 7 * step + 44
     body = f"""
@@ -542,7 +543,7 @@ def main():
     data = json.loads((ROOT / "data" / "github.json").read_text(encoding="utf-8"))
     repos = own_repos(config, data)
     hero_alt = hero(config)
-    heatmap(data)
+    heatmap(config, data)
     activity(data)
     tile_alts, tile_urls = tiles(config, repos)
     section_title("dark")
