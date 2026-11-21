@@ -1,0 +1,19 @@
+{
+  "username": "Krish-kunjadiya",
+  "first_name": "Krish",
+  "last_name": "Kunjadiya",
+  "eyebrow": "BUILDING WITH AI AND DATA",
+  "tagline": "I build AI and data projects, from demand forecasting to fraud detection.",
+  "links": [
+    { "label": "github", "url": "https://github.com/Krish-kunjadiya?tab=repositories" },
+    { "label": "kaggle", "url": "https://www.kaggle.com/krishkunjadiya" },
+    { "label": "leetcode", "url": "https://leetcode.com/u/KrishKunjadiya/" }
+  ],
+  "featured_repos": [],
+  "hidden_repos": [],
+  "repo_descriptions": {
+    "AI-Powered-Proposal-Generator": "Turns client requirements into branded PDF proposals with Gemini.",
+    "Supplychain_Forecasting_and_Optimization": "Demand forecasting with LSTM and XGBoost for inventory planning.",
+    "InnovateX-Hackthon": "Credit card fraud detection, built for the InnovateX hackathon."
+  }
+}
