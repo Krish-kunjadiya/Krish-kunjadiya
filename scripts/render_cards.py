@@ -2,8 +2,8 @@
 """Render every profile card to cards/*.svg and rebuild README.md.
 
 Inputs: profile.json (your words), data/github.json (live numbers) and
-data/portrait.json (ASCII avatar). GitHub shows these SVGs through <img>, so they
-use only inline CSS, SMIL and embedded fonts.
+assets/portrait.png. GitHub shows these SVGs through <img>, so they use only
+inline CSS, SMIL and embedded fonts and images.
 """
 import base64
 import datetime as dt
@@ -17,6 +17,7 @@ from fontTools.ttLib import TTFont
 ROOT = Path(__file__).resolve().parent.parent
 CARDS = ROOT / "cards"
 FONTS = ROOT / "fonts"
+PORTRAIT = ROOT / "assets" / "portrait.png"
 
 ACCENT = "#FA4400"
 PAPER = "#f3f3f1"
@@ -32,19 +33,16 @@ W = 880
 GAP = 12
 THIRD_W = W / 3 - 8
 
-SERIF = "'Instrument Serif', Georgia, serif"
-SANS = "Geist, system-ui, -apple-system, sans-serif"
-MONO = "'Geist Mono', ui-monospace, SFMono-Regular, Menlo, monospace"
+FAMILY = "'Space Grotesk', system-ui, -apple-system, 'Segoe UI', sans-serif"
+FONT_FILES = {weight: f"space-grotesk-{weight}.woff" for weight in (400, 600, 700)}
 
-FONT_FILES = {
-    "serif": ("Instrument Serif", "normal", 400, "serif-400.woff"),
-    "serif-i": ("Instrument Serif", "italic", 400, "serif-italic.woff"),
-    "sans": ("Geist", "normal", 400, "geist-400.woff"),
-    "sans-b": ("Geist", "normal", 600, "geist-600.woff"),
-    "mono": ("Geist Mono", "normal", 400, "geistmono-400.woff"),
-}
+# Tracking taken from the portfolio's type styles.
+TIGHT = -0.045
+GIANT = -0.075
+MIDDLE = 'text-anchor="middle"'
 
 CSS = """
+text{font-variant-numeric:tabular-nums}
 @keyframes rise{from{opacity:0;transform:translateY(14px)}to{opacity:1;transform:none}}
 @keyframes fade{from{opacity:0}to{opacity:1}}
 @keyframes grow{from{transform:scaleY(0)}to{transform:scaleY(1)}}
@@ -67,21 +65,21 @@ def clean(text):
     return re.sub(r"[\x00-\x08\x0b\x0c\x0e-\x1f]", "", text or "").strip()
 
 
-def text_width(text, font, size):
-    if font not in _metrics:
-        loaded = TTFont(FONTS / FONT_FILES[font][3])
-        _metrics[font] = (loaded.getBestCmap(), loaded["hmtx"], loaded["head"].unitsPerEm)
-    cmap, hmtx, upem = _metrics[font]
+def text_width(text, weight, size, track=0):
+    if weight not in _metrics:
+        loaded = TTFont(FONTS / FONT_FILES[weight])
+        _metrics[weight] = (loaded.getBestCmap(), loaded["hmtx"], loaded["head"].unitsPerEm)
+    cmap, hmtx, upem = _metrics[weight]
     units = sum(hmtx[cmap[ord(c)]][0] if ord(c) in cmap else upem * 0.6 for c in text)
-    return units * size / upem
+    return units * size / upem + len(text) * track * size
 
 
-def wrap(text, font, size, width, max_lines):
+def wrap(text, weight, size, width, max_lines, track=0):
     lines, line = [], ""
     words = clean(text).split()
     for index, word in enumerate(words):
         candidate = f"{line} {word}".strip()
-        if text_width(candidate, font, size) <= width:
+        if text_width(candidate, weight, size, track) <= width:
             line = candidate
             continue
         if line:
@@ -98,7 +96,7 @@ def wrap(text, font, size, width, max_lines):
     if words or len(lines) > max_lines:
         lines = lines[:max_lines]
         last = lines[-1]
-        while last and text_width(last + "...", font, size) > width:
+        while last and text_width(last + "...", weight, size, track) > width:
             last = last[:-1].rstrip()
         lines[-1] = last.rstrip(",.;:") + "..."
     return lines
@@ -127,13 +125,46 @@ def pretty_name(name):
     return re.sub(r"[-_]+", " ", name).strip()
 
 
-def write_svg(name, width, height, body, fonts, label, left=0, right=0, bottom=GAP):
+def label_text(x, y, content, fill=MUTED, attrs=""):
+    return txt(x, y, escape(content), 12, 600, fill, 0.08, attrs)
+
+
+def txt(x, y, content, size, weight=400, fill=INK, track=0, attrs=""):
+    spacing = f' letter-spacing="{track}em"' if track else ""
+    extra = f" {attrs}" if attrs else ""
+    return (
+        f'<text x="{x}" y="{y}" font-family="{FAMILY}" font-size="{size}" '
+        f'font-weight="{weight}" fill="{fill}"{spacing}{extra}>{content}</text>'
+    )
+
+
+def arrow_right(x, y, color, at):
+    return (
+        f'<g transform="translate({x:.1f} {y})"><path class="n" style="animation-delay:{at:.2f}s" d="M0 6h12M8 2l4 4-4 4" '
+        f'fill="none" stroke="{color}" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></g>'
+    )
+
+
+def arrow_up_right(x, y, color):
+    return (
+        f'<path transform="translate({x:.1f} {y})" d="M1 10 10 1M3 1h7v7" fill="none" stroke="{color}" '
+        'stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>'
+    )
+
+
+def star(x, y, color):
+    return (
+        f'<path transform="translate({x:.1f} {y})" fill="{color}" '
+        'd="M6 .8l1.6 3.4 3.7.5-2.7 2.6.7 3.7L6 9.2 2.7 11l.7-3.7L.7 4.7l3.7-.5z"/>'
+    )
+
+
+def write_svg(name, width, height, body, weights, label, left=0, right=0, bottom=GAP):
     faces = []
-    for key in fonts:
-        family, style, weight, filename = FONT_FILES[key]
-        encoded = base64.b64encode((FONTS / filename).read_bytes()).decode()
+    for weight in weights:
+        encoded = base64.b64encode((FONTS / FONT_FILES[weight]).read_bytes()).decode()
         faces.append(
-            f"@font-face{{font-family:'{family}';font-style:{style};font-weight:{weight};"
+            f"@font-face{{font-family:'Space Grotesk';font-style:normal;font-weight:{weight};"
             f"src:url(data:font/woff;base64,{encoded}) format('woff')}}"
         )
     if left:
@@ -149,30 +180,22 @@ def write_svg(name, width, height, body, fonts, label, left=0, right=0, bottom=G
     (CARDS / name).write_text(svg, encoding="utf-8", newline="\n")
 
 
-def hero(config, portrait):
+def hero(config):
     height = 420
-    box = 300
-    cell = box / portrait["cols"]
-    line = cell * 1.875
-    size = cell / 0.6
-    px, py = 540, (height - portrait["rows"] * line) / 2
-    layers = []
-    for layer, color, stroke in (("ink", INK, ""), ("accent", ACCENT, f' stroke="{ACCENT}" stroke-width=".32"')):
-        for index, row in enumerate(portrait[layer]):
-            if not row.strip():
-                continue
-            layers.append(
-                f'<text class="f" style="animation-delay:{0.25 + index * 0.02:.2f}s;animation-duration:.35s" '
-                f'xml:space="preserve" x="{px}" y="{py + (index + 0.8) * line:.2f}" fill="{color}"{stroke} '
-                f'font-size="{size:.3f}" textLength="{len(row) * cell:.2f}" lengthAdjust="spacing">{escape(row)}</text>'
-            )
-    tagline = wrap(config["tagline"], "sans", 18, 450, 2)
+    panel_x = 500
+    panel_w = W - panel_x
+    photo = base64.b64encode(PORTRAIT.read_bytes()).decode()
+    first, last = config["first_name"], config["last_name"]
+    longest = max(text_width(first, 700, 1, GIANT), text_width(last, 700, 1, GIANT))
+    name_size = round(min(112, 424 / longest), 1)
+    first_y = 178
+    last_y = round(first_y + name_size * 0.92, 1)
+    tagline = wrap(config["tagline"], 400, 18, 420, 2, -0.02)
     tagline_svg = "".join(
-        f'<text x="48" y="{338 + i * 27}" font-family="{SANS}" font-size="18" fill="{INK_SOFT}">{escape(t)}</text>'
-        for i, t in enumerate(tagline)
+        txt(48, 338 + i * 25, escape(line), 18, 400, INK_SOFT, -0.02) for i, line in enumerate(tagline)
     )
-    handle = f"github.com/{config['username']}"
-    arrow_x = 48 + text_width(handle, "mono", 13) + 8
+    handle = re.sub(r"^https?://", "", config["website"]).rstrip("/")
+    arrow_x = 48 + text_width(handle, 600, 14, -0.01) + 8
     body = f"""
 <defs><linearGradient id="shine" gradientUnits="userSpaceOnUse" x1="0" y1="0" x2="600" y2="0">
 <stop offset="0" stop-color="{INK}"/><stop offset=".42" stop-color="{INK}"/><stop offset=".5" stop-color="{ACCENT}"/>
@@ -180,17 +203,18 @@ def hero(config, portrait):
 <animateTransform attributeName="gradientTransform" type="translate" values="-600 0;600 0;600 0" keyTimes="0;.45;1" dur="7s" begin="1.6s" repeatCount="indefinite"/>
 </linearGradient></defs>
 <rect width="{W}" height="{height}" rx="14" fill="{PAPER}"/>
-<g class="f"><rect class="live" x="48" y="49" width="8" height="8" rx="2" fill="{ACCENT}"/>
-<text x="66" y="57" font-family="{MONO}" font-size="12" letter-spacing="1" fill="{MUTED}">{escape(config["eyebrow"])}</text></g>
-<text class="r" {delay(.15)} x="44" y="190" font-family="{SERIF}" font-size="116" letter-spacing="-2.5" fill="{INK}">{escape(config["first_name"])}</text>
-<text class="r" {delay(.3)} x="44" y="290" font-family="{SERIF}" font-style="italic" font-size="116" letter-spacing="-2.5" fill="url(#shine)">{escape(config["last_name"])}</text>
+<g class="f"><rect class="live" x="48" y="47" width="9" height="9" rx="2" fill="{ACCENT}"/>
+{txt(66, 58, escape(config["eyebrow"]), 20, 600, INK_SOFT, TIGHT)}</g>
+<g class="r" {delay(.15)}>{txt(44, first_y, escape(first), name_size, 700, INK, GIANT)}</g>
+<g class="r" {delay(.3)}>{txt(44, last_y, escape(last), name_size, 700, "url(#shine)", GIANT)}</g>
 <g class="r" {delay(.55)}>{tagline_svg}</g>
-<g class="f" {delay(.8)}><text x="48" y="400" font-family="{MONO}" font-size="13" fill="{INK}">{escape(handle)}</text>
-<text x="{arrow_x:.1f}" y="400" font-family="{MONO}" font-size="13" fill="{ACCENT}">&#8599;</text></g>
-<g font-family="{MONO}">{"".join(layers)}</g>
+<g class="f" {delay(.8)}>{txt(48, 400, escape(handle), 14, 600, INK, -0.01)}{arrow_up_right(arrow_x, 389, ACCENT)}</g>
+<clipPath id="panel"><path d="M{panel_x} 0H{W - 14}a14 14 0 0 1 14 14V{height - 14}a14 14 0 0 1-14 14H{panel_x}Z"/></clipPath>
+<g clip-path="url(#panel)"><rect x="{panel_x}" width="{panel_w}" height="{height}" fill="{ACCENT}"/>
+<image class="f" {delay(.2)} href="data:image/png;base64,{photo}" x="{panel_x}" y="0" width="{panel_w}" height="{height}" preserveAspectRatio="xMidYMid slice"/></g>
 """
-    label = f'{config["first_name"]} {config["last_name"]}. {config["tagline"]}'
-    write_svg("hero.svg", W, height, body, ["serif", "serif-i", "sans", "mono"], label)
+    label = f'{first} {last}. {config["tagline"]}'
+    write_svg("hero.svg", W, height, body, [400, 600, 700], label)
     return label
 
 
@@ -209,19 +233,19 @@ def heatmap(data):
             months.append((col if row == 0 else col + 1, date.strftime("%b")))
         count = day["count"]
         cells.append(
-            f'<rect class="p" style="animation-delay:{.7 + col * .025 + row * .02:.2f}s" x="{gx + col * step}" '
+            f'<rect class="p" style="animation-delay:{.15 + col * .012 + row * .01:.2f}s" x="{gx + col * step}" '
             f'y="{gy + row * step}" width="{cell}" height="{cell}" rx="3" fill="{HEAT[day["level"]]}">'
             f'<title>{day["date"]}: {count} {plural(count, "contribution")}</title></rect>'
         )
     columns = (len(days) + lead + 6) // 7
     right = gx + columns * step - 3
     labels = "".join(
-        f'<text x="{gx + col * step}" y="{gy + 7 * step + 16}" font-family="{MONO}" font-size="11" fill="{MUTED}">{name}</text>'
+        txt(gx + col * step, gy + 7 * step + 16, name, 12, 400, MUTED)
         for i, (col, name) in enumerate(months)
         if (i + 1 == len(months) or months[i + 1][0] - col >= 3) and col < columns - 1
     )
     legend_y = 50
-    legend_x = right - len(HEAT) * 14 - 28
+    legend_x = right - len(HEAT) * 14 - 34
     legend = "".join(
         f'<rect x="{legend_x + i * 14}" y="{legend_y}" width="11" height="11" rx="2.5" fill="{color}"/>'
         for i, color in enumerate(HEAT)
@@ -231,16 +255,16 @@ def heatmap(data):
     height = gy + 7 * step + 44
     body = f"""
 <rect width="{W}" height="{height}" rx="14" fill="{PAPER}"/>
-<text class="r" {delay(.5)} x="42" y="62" font-family="{SERIF}" font-size="34" fill="{INK}">Every day, <tspan font-style="italic" fill="{ACCENT}">in orange</tspan></text>
-<g class="f" {delay(.6)}>
-<text x="{legend_x - 8}" y="{legend_y + 10}" text-anchor="end" font-family="{MONO}" font-size="11" fill="{MUTED}">less</text>{legend}
-<text x="{legend_x + len(HEAT) * 14 + 2}" y="{legend_y + 10}" font-family="{MONO}" font-size="11" fill="{MUTED}">more</text>
-<text x="{legend_x - 52}" y="{legend_y + 10}" text-anchor="end" font-family="{MONO}" font-size="11" letter-spacing="1" fill="{MUTED}">{stamp}</text>
+<g class="r" {delay(.05)}>{txt(42, 66, f'Every day, <tspan fill="{ACCENT}">in orange</tspan>', 34, 600, INK, TIGHT)}</g>
+<g class="f" {delay(.1)}>
+{txt(legend_x - 8, legend_y + 10, "less", 12, 400, MUTED, 0, 'text-anchor="end"')}{legend}
+{txt(legend_x + len(HEAT) * 14 + 2, legend_y + 10, "more", 12, 400, MUTED)}
+{label_text(legend_x - 56, legend_y + 10, stamp, MUTED, 'text-anchor="end"')}
 </g>
 {"".join(cells)}
-<g class="f" {delay(1.8)}>{labels}</g>
+<g class="f" {delay(.7)}>{labels}</g>
 """
-    write_svg("heatmap.svg", W, height, body, ["serif", "serif-i", "mono"],
+    write_svg("heatmap.svg", W, height, body, [400, 600],
               f'Contribution graph: {data["total_contributions"]:,} contributions in the last year')
 
 
@@ -258,16 +282,18 @@ def activity(data):
         x = x0 + index * (bar + gap)
         fill = ACCENT if month is best and month["total"] else PARTIAL if partial else INK
         name = dt.date.fromisoformat(month["month"] + "-01").strftime("%b")
-        at = 1.5 + index * .06
+        at = .2 + index * .05
+        center = f"{x + bar / 2:.1f}"
         bars.append(
             f'<rect class="g" {delay(at)} x="{x:.1f}" y="{base - bar_h}" width="{bar:.1f}" height="{bar_h}" rx="4" fill="{fill}">'
             f'<title>{name}: {month["total"]:,}</title></rect>'
-            f'<text class="f" {delay(at)} x="{x + bar / 2:.1f}" y="{base + 22}" text-anchor="middle" font-family="{MONO}" font-size="11" fill="{MUTED}">{name}</text>'
+            f'<g class="f" {delay(at)}>{txt(center, base + 22, name, 12, 400, MUTED, 0, MIDDLE)}</g>'
         )
         if month is best and month["total"]:
             bars.append(
-                f'<text class="p" {delay(2.4)} x="{x + bar / 2:.1f}" y="{base - bar_h - 10}" text-anchor="middle" '
-                f'font-family="{MONO}" font-size="11" fill="{INK}">{month["total"]:,}</text>'
+                f'<g class="p" {delay(.9)}>'
+                + txt(center, base - bar_h - 10, f'{month["total"]:,}', 12, 600, INK, 0, MIDDLE)
+                + "</g>"
             )
     current, longest = data["current_streak"], data["longest_streak"]
     if current:
@@ -276,7 +302,7 @@ def activity(data):
     else:
         streak, note = longest, "longest streak this year"
     stats = [
-        (f'{streak} <tspan font-style="italic">{plural(streak, "day")}</tspan>', note),
+        (f'{streak} {plural(streak, "day")}', note),
         (f'{data["active_days"]}<tspan fill="#8e8e93"> / {len(data["days"])}</tspan>', "days with a contribution"),
         (f'{data["best_day"]["count"]}', "on the busiest day"),
     ]
@@ -284,77 +310,72 @@ def activity(data):
     for index, (big, small) in enumerate(stats):
         y = 104 + index * 92
         side.append(
-            f'<g class="r" {delay(1.9 + index * .14)}><text x="650" y="{y}" font-family="{SERIF}" font-size="40" fill="{INK}">{big}</text>'
-            f'<text x="650" y="{y + 24}" font-family="{SANS}" font-size="13" fill="{MUTED}">{small}</text></g>'
+            f'<g class="r" {delay(.4 + index * .12)}>{txt(650, y, big, 38, 700, INK, -0.03)}'
+            f'{txt(650, y + 24, small, 13, 400, MUTED)}</g>'
         )
         if index < 2:
-            side.append(f'<rect class="f" {delay(1.9)} x="650" y="{y + 44}" width="190" height="1" fill="{RULE}"/>')
+            side.append(f'<rect class="f" {delay(.4)} x="650" y="{y + 44}" width="190" height="1" fill="{RULE}"/>')
     total = data["total_contributions"]
     body = f"""
 <rect width="{W}" height="{height}" rx="14" fill="{PAPER}"/>
-<text class="f" {delay(1.2)} x="40" y="58" font-family="{MONO}" font-size="12" letter-spacing="1" fill="{MUTED}">THE LAST 12 MONTHS ON GITHUB</text>
-<text class="r" {delay(1.3)} x="38" y="114" font-family="{SERIF}" font-size="52" fill="{INK}">{total:,} <tspan font-style="italic">{plural(total, "contribution")}</tspan></text>
+<g class="f" {delay(.05)}>{label_text(40, 58, "THE LAST 12 MONTHS ON GITHUB")}</g>
+<g class="r" {delay(.1)}>{txt(38, 114, f'{total:,} {plural(total, "contribution")}', 46, 700, INK, -0.05)}</g>
 {"".join(bars)}{"".join(side)}
 """
-    write_svg("activity.svg", W, height, body, ["serif", "serif-i", "sans", "mono"],
+    write_svg("activity.svg", W, height, body, [400, 600, 700],
               f"{total:,} contributions in the last 12 months, best streak {max(current, longest)} days")
 
 
 def tile(position, name, label, bg, fg, number, word, blurb, at):
     height = 210
-    lines = wrap(blurb, "sans", 14, THIRD_W - 48, 3)
+    lines = wrap(blurb, 400, 14, THIRD_W - 48, 3)
     blurb_svg = "".join(
-        f'<text class="r" {delay(at + .4 + i * .08)} x="24" y="{150 + i * 20}" font-family="{SANS}" font-size="14" fill="{fg}">{escape(t)}</text>'
-        for i, t in enumerate(lines)
+        f'<g class="r" {delay(at + .4 + i * .08)}>{txt(24, 150 + i * 20, escape(line), 14, 400, fg)}</g>'
+        for i, line in enumerate(lines)
     )
     edge = ' stroke="#30363d"' if bg == INK else ""  # keeps the black tile visible on GitHub's dark theme
     body = f"""
 <rect x=".5" y=".5" width="{THIRD_W - 1}" height="{height - 1}" rx="14" fill="{bg}"{edge}/>
-<text class="f" {delay(at)} x="24" y="38" font-family="{MONO}" font-size="12" letter-spacing="1.2" fill="{fg}">{label}</text>
-<text class="n" style="animation-delay:{at + 1:.2f}s" x="{THIRD_W - 36:.1f}" y="38" font-family="{MONO}" font-size="14" fill="{fg}">&#8594;</text>
-<text class="r" {delay(at + .2)} x="22" y="112" font-family="{SERIF}" font-size="44" fill="{fg}">{number} <tspan font-style="italic">{escape(word)}</tspan></text>
+<g class="f" {delay(at)}>{label_text(24, 38, label, fg)}</g>
+{arrow_right(THIRD_W - 38, 27, fg, at + 1)}
+<g class="r" {delay(at + .2)}>{txt(23, 112, f"{number} {escape(word)}", 40, 700, fg, -0.06)}</g>
 {blurb_svg}
 """
     alt = f"{label}: {number} {word}. {blurb}"
-    write_svg(f"{name}.svg", THIRD_W, height, body, ["serif", "serif-i", "sans", "mono"], alt,
+    write_svg(f"{name}.svg", THIRD_W, height, body, [400, 600, 700], alt,
               left=4 * position, right=8 - 4 * position)
     return alt
 
 
 def repo_card(position, repo, description):
     height = 176
-    at = 3.4 + position * .12
-    title = wrap(pretty_name(repo["name"]), "sans-b", 18, THIRD_W - 64, 2)
-    title_svg = "".join(
-        f'<text x="40" y="{39 + i * 23}" font-family="{SANS}" font-weight="600" font-size="18" fill="{INK}">{escape(t)}</text>'
-        for i, t in enumerate(title)
-    )
+    at = .05 + position * .12
+    title = wrap(pretty_name(repo["name"]), 600, 18, THIRD_W - 64, 2, -0.03)
+    title_svg = "".join(txt(40, 39 + i * 23, escape(line), 18, 600, INK, -0.03) for i, line in enumerate(title))
     first_y = 39 + (len(title) - 1) * 23 + 33
-    lines = wrap(description, "sans", 14, THIRD_W - 48, 3 if len(title) == 1 else 2)
-    desc_svg = "".join(
-        f'<text x="24" y="{first_y + i * 21}" font-family="{SANS}" font-size="14" fill="{INK_SOFT}">{escape(t)}</text>'
-        for i, t in enumerate(lines)
-    )
-    meta = "  ·  ".join(part for part in [repo["language"], f'★ {repo["stars"]}' if repo["stars"] else ""] if part)
+    lines = wrap(description, 400, 14, THIRD_W - 48, 3 if len(title) == 1 else 2)
+    desc_svg = "".join(txt(24, first_y + i * 21, escape(line), 14, 400, INK_SOFT) for i, line in enumerate(lines))
+    meta_y = height - 22
+    meta = txt(24, meta_y, escape(repo["language"]), 12, 400, MUTED) if repo["language"] else ""
+    if repo["stars"]:
+        star_x = 24 + (text_width(repo["language"], 400, 12) + 14 if repo["language"] else 0)
+        meta += star(star_x, meta_y - 10, MUTED) + txt(f"{star_x + 16:.1f}", meta_y, str(repo["stars"]), 12, 400, MUTED)
     color = (ACCENT, INK, YELLOW)[position]
     body = f"""
 <rect width="{THIRD_W}" height="{height}" rx="14" fill="{PAPER}"/>
-<g class="r" {delay(at)}><rect x="24" y="30" width="8" height="8" rx="2" fill="{color}"/>{title_svg}{desc_svg}
-<text x="24" y="{height - 22}" font-family="{MONO}" font-size="12" fill="{MUTED}" xml:space="preserve">{escape(meta)}</text></g>
+<g class="r" {delay(at)}><rect x="24" y="30" width="8" height="8" rx="2" fill="{color}"/>{title_svg}{desc_svg}{meta}</g>
 """
     alt = f'{pretty_name(repo["name"])}: {description}'
-    write_svg(f"repo-{position + 1}.svg", THIRD_W, height, body, ["sans", "sans-b", "mono"], alt,
+    write_svg(f"repo-{position + 1}.svg", THIRD_W, height, body, [400, 600], alt,
               left=4 * position, right=8 - 4 * position)
     return alt
 
 
 def section_title(theme):
     color = "#e6edf3" if theme == "dark" else INK
-    body = (
-        f'<text class="r" {delay(3.2)} x="2" y="46" font-family="{SERIF}" font-size="34" fill="{color}">'
-        f'What I\'m <tspan font-style="italic">coding</tspan></text>'
-    )
-    write_svg(f"title-coding-{theme}.svg", W, 64, body, ["serif", "serif-i"], "What I'm coding", bottom=0)
+    content = f'What I\'m <tspan fill="{ACCENT}">coding</tspan>'
+    body = f'<g class="r" {delay(0)}>{txt(2, 46, content, 34, 600, color, TIGHT)}</g>'
+    write_svg(f"title-coding-{theme}.svg", W, 64, body, [600], "What I'm coding", bottom=0)
 
 
 def own_repos(config, data):
@@ -381,20 +402,20 @@ def tiles(config, data, repos):
     base = f'https://github.com/{config["username"]}'
     latest = max(repos, key=lambda r: r["pushed_at"])
     alts = [tile(0, "build", "BUILD", ACCENT, INK, len(repos), plural(len(repos), "project"),
-                 f'Public repos, most recently {pretty_name(latest["name"])}.', 2.5)]
+                 f'Public repos, most recently {pretty_name(latest["name"])}.', .05)]
     stars = sum(r["stars"] for r in repos)
     top = max(repos, key=lambda r: r["stars"])
     followers = data["followers"]
     star_note = f'Led by {pretty_name(top["name"])}. ' if top["stars"] else ""
     alts.append(tile(1, "community", "COMMUNITY", INK, "#ffffff", stars, plural(stars, "star"),
-                     f'{star_note}{followers} {plural(followers, "follower")} on GitHub.', 2.7))
+                     f'{star_note}{followers} {plural(followers, "follower")} on GitHub.', .2))
     counts = {}
     for repo in repos:
         if repo["language"]:
             counts[repo["language"]] = counts.get(repo["language"], 0) + 1
     languages = sorted(counts, key=lambda l: (-counts[l], l))
     blurb = f"Mostly {languages[0]}" + (f", plus {join_words(languages[1:])}." if len(languages) > 1 else ".")
-    alts.append(tile(2, "stack", "STACK", YELLOW, INK, len(languages), plural(len(languages), "language"), blurb, 2.9))
+    alts.append(tile(2, "stack", "STACK", YELLOW, INK, len(languages), plural(len(languages), "language"), blurb, .35))
     return alts, [f"{base}?tab=repositories", f"{base}?tab=followers", f"{base}?tab=repositories&sort=stargazers"]
 
 
@@ -415,10 +436,9 @@ def write_readme(config, data, hero_alt, tile_alts, tile_urls, picks, repo_alts)
         linked(repo["url"], image(f"repo-{i + 1}.svg", repo_alts[i], "33.333%")) for i, repo in enumerate(picks)
     )
     links = " &nbsp;/&nbsp; ".join(linked(l["url"], escape(l["label"])) for l in config["links"])
-    profile_url = f'https://github.com/{config["username"]}'
     readme = f"""<!-- Generated by scripts/render_cards.py. Edit profile.json, not this file. -->
 <div align="center">
-{linked(profile_url, image("hero.svg", hero_alt))}<br>
+{linked(config["website"], image("hero.svg", hero_alt))}<br>
 {image("heatmap.svg", "Contribution graph in orange, refreshed daily")}<br>
 {image("activity.svg", f'{data["total_contributions"]:,} contributions in the last 12 months, by month')}<br>
 {tile_row}<br>
@@ -436,9 +456,8 @@ def write_readme(config, data, hero_alt, tile_alts, tile_urls, picks, repo_alts)
 def main():
     config = json.loads((ROOT / "profile.json").read_text(encoding="utf-8"))
     data = json.loads((ROOT / "data" / "github.json").read_text(encoding="utf-8"))
-    portrait = json.loads((ROOT / "data" / "portrait.json").read_text(encoding="utf-8"))
     repos = own_repos(config, data)
-    hero_alt = hero(config, portrait)
+    hero_alt = hero(config)
     heatmap(data)
     activity(data)
     tile_alts, tile_urls = tiles(config, data, repos)
