@@ -197,15 +197,15 @@ def hero(config):
     handle = re.sub(r"^https?://", "", config["website"]).rstrip("/")
     arrow_x = 48 + text_width(handle, 600, 14, -0.01) + 8
     body = f"""
-<defs><linearGradient id="shine" gradientUnits="userSpaceOnUse" x1="0" y1="0" x2="600" y2="0">
-<stop offset="0" stop-color="{INK}"/><stop offset=".42" stop-color="{INK}"/><stop offset=".5" stop-color="{ACCENT}"/>
-<stop offset=".58" stop-color="{INK}"/><stop offset="1" stop-color="{INK}"/>
-<animateTransform attributeName="gradientTransform" type="translate" values="-600 0;600 0;600 0" keyTimes="0;.45;1" dur="7s" begin="1.6s" repeatCount="indefinite"/>
+<defs><linearGradient id="shine" gradientUnits="userSpaceOnUse" x1="0" y1="0" x2="600" y2="0" gradientTransform="translate(-600 0)">
+<stop offset="0" stop-color="{INK}"/><stop offset=".4" stop-color="{INK}"/><stop offset=".5" stop-color="{mix(INK, ACCENT, 0.3)}"/>
+<stop offset=".6" stop-color="{INK}"/><stop offset="1" stop-color="{INK}"/>
+<animateTransform attributeName="gradientTransform" type="translate" values="-600 0;600 0" keyTimes="0;1" calcMode="spline" keySplines=".45 0 .55 1" dur="2.2s" begin="1s" repeatCount="2" fill="freeze"/>
 </linearGradient></defs>
 <rect width="{W}" height="{height}" rx="14" fill="{PAPER}"/>
 <g class="f"><rect class="live" x="48" y="47" width="9" height="9" rx="2" fill="{ACCENT}"/>
 {txt(66, 58, escape(config["eyebrow"]), 20, 600, INK_SOFT, TIGHT)}</g>
-<g class="r" {delay(.15)}>{txt(44, first_y, escape(first), name_size, 700, INK, GIANT)}</g>
+<g class="r" {delay(.15)}>{txt(44, first_y, escape(first), name_size, 700, "url(#shine)", GIANT)}</g>
 <g class="r" {delay(.3)}>{txt(44, last_y, escape(last), name_size, 700, "url(#shine)", GIANT)}</g>
 <g class="r" {delay(.55)}>{tagline_svg}</g>
 <g class="f" {delay(.8)}>{txt(48, 400, escape(handle), 14, 600, INK, -0.01)}{arrow_up_right(arrow_x, 389, ACCENT)}</g>
