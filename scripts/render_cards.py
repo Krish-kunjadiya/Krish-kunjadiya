@@ -159,7 +159,7 @@ def star(x, y, color):
     )
 
 
-def write_svg(name, width, height, body, weights, label, left=0, right=0, bottom=GAP):
+def write_svg(name, width, height, body, weights, label, left=0, right=0, bottom=GAP, extra_css=""):
     faces = []
     for weight in weights:
         encoded = base64.b64encode((FONTS / FONT_FILES[weight]).read_bytes()).decode()
@@ -174,7 +174,7 @@ def write_svg(name, width, height, body, weights, label, left=0, right=0, bottom
     svg = (
         f'<svg xmlns="http://www.w3.org/2000/svg" width="{full_w:.3f}" height="{full_h}" '
         f'viewBox="0 0 {full_w:.3f} {full_h}" role="img" aria-label="{safe}"><title>{safe}</title>'
-        f'<style>{"".join(faces)}{CSS}</style>{body}</svg>\n'
+        f'<style>{"".join(faces)}{CSS}{extra_css}</style>{body}</svg>\n'
     )
     CARDS.mkdir(exist_ok=True)
     (CARDS / name).write_text(svg, encoding="utf-8", newline="\n")
@@ -200,7 +200,7 @@ def hero(config):
 <defs><linearGradient id="shine" gradientUnits="userSpaceOnUse" x1="0" y1="0" x2="600" y2="0" gradientTransform="translate(-600 0)">
 <stop offset="0" stop-color="{INK}"/><stop offset=".4" stop-color="{INK}"/><stop offset=".5" stop-color="{mix(INK, ACCENT, 0.3)}"/>
 <stop offset=".6" stop-color="{INK}"/><stop offset="1" stop-color="{INK}"/>
-<animateTransform attributeName="gradientTransform" type="translate" values="-600 0;600 0" keyTimes="0;1" calcMode="spline" keySplines=".45 0 .55 1" dur="2.2s" begin="1s" repeatCount="2" fill="freeze"/>
+<animateTransform attributeName="gradientTransform" type="translate" values="-600 0;600 0" keyTimes="0;1" calcMode="spline" keySplines=".45 0 .55 1" dur="2.2s" begin="1s" fill="freeze"/>
 </linearGradient></defs>
 <rect width="{W}" height="{height}" rx="14" fill="{PAPER}"/>
 <g class="f"><rect class="live" x="48" y="47" width="9" height="9" rx="2" fill="{ACCENT}"/>
@@ -333,9 +333,8 @@ def tile(position, name, label, bg, fg, number, word, blurb, at):
         f'<g class="r" {delay(at + .4 + i * .08)}>{txt(24, 150 + i * 20, escape(line), 14, 400, fg)}</g>'
         for i, line in enumerate(lines)
     )
-    edge = ' stroke="#30363d"' if bg == INK else ""  # keeps the black tile visible on GitHub's dark theme
     body = f"""
-<rect x=".5" y=".5" width="{THIRD_W - 1}" height="{height - 1}" rx="14" fill="{bg}"{edge}/>
+<rect width="{THIRD_W}" height="{height}" rx="14" fill="{bg}"/>
 <g class="f" {delay(at)}>{label_text(24, 38, label, fg)}</g>
 {arrow_right(THIRD_W - 38, 27, fg, at + 1)}
 <g class="r" {delay(at + .2)}>{txt(23, 112, f"{number} {escape(word)}", 40, 700, fg, -0.06)}</g>
@@ -344,6 +343,96 @@ def tile(position, name, label, bg, fg, number, word, blurb, at):
     alt = f"{label}: {number} {word}. {blurb}"
     write_svg(f"{name}.svg", THIRD_W, height, body, [400, 600, 700], alt,
               left=4 * position, right=8 - 4 * position)
+    return alt
+
+
+PIXEL_FONT = {
+    " ": ("00000",) * 7,
+    "A": ("01110", "10001", "10001", "11111", "10001", "10001", "10001"),
+    "C": ("01110", "10001", "10000", "10000", "10000", "10001", "01110"),
+    "E": ("11111", "10000", "10000", "11110", "10000", "10000", "11111"),
+    "G": ("01110", "10001", "10000", "10111", "10001", "10001", "01111"),
+    "H": ("10001", "10001", "10001", "11111", "10001", "10001", "10001"),
+    "I": ("01110", "00100", "00100", "00100", "00100", "00100", "01110"),
+    "L": ("10000", "10000", "10000", "10000", "10000", "10000", "11111"),
+    "M": ("10001", "11011", "10101", "10101", "10001", "10001", "10001"),
+    "N": ("10001", "11001", "10101", "10011", "10001", "10001", "10001"),
+    "O": ("01110", "10001", "10001", "10001", "10001", "10001", "01110"),
+    "P": ("11110", "10001", "10001", "11110", "10000", "10000", "10000"),
+    "R": ("11110", "10001", "10001", "11110", "10100", "10010", "10001"),
+    "W": ("10001", "10001", "10001", "10101", "10101", "11011", "10001"),
+    "Y": ("10001", "10001", "01010", "00100", "00100", "00100", "00100"),
+    ",": ("00000", "00000", "00000", "00000", "00110", "00100", "01000"),
+    "?": ("01110", "10001", "00001", "00110", "00100", "00000", "00100"),
+}
+BOT_OUTLINE = ("000010000", "000010000", "111111111", "100000001", "101000101", "100000001", "100111001", "111111111")
+BOT_SOLID = ("000010000", "000111000", "111111111", "110111011", "111111111", "110000011", "111111111", "011000110")
+POINTER = ("1000000", "1100000", "1110000", "1111000", "1111100", "1111110", "1111111", "1111000", "1001100", "0001100")
+PIXEL_ARROW = ("0000100", "0000010", "1111111", "0000010", "0000100")
+
+ARCADE_CSS = """
+@keyframes march{0%{transform:translateX(-18px)}25%{transform:translateX(-6px)}50%{transform:translateX(12px)}75%{transform:translateX(-6px)}100%{transform:none}}
+@keyframes aim{from{transform:translateX(-72px)}to{transform:none}}
+@keyframes shot{0%{opacity:1;transform:translateY(15px)}99%{opacity:1;transform:none}100%{opacity:0;transform:none}}
+@keyframes hit{0%,83%{opacity:1}86%{opacity:0}90%{opacity:1}93%{opacity:0}96%{opacity:1}100%{opacity:0}}
+@keyframes burst{0%{opacity:1;transform:scale(.4)}100%{opacity:0;transform:scale(1.5)}}
+.march{animation:march 1.4s steps(1,end) both}
+.aim{animation:aim 1.2s steps(6,end) .2s both}
+.shot{opacity:0;animation:shot .24s steps(3,end) 1.5s forwards}
+.hit{opacity:0;animation:hit 2.1s steps(1,end) both}
+.burst{opacity:0;transform-box:fill-box;transform-origin:center;animation:burst .35s steps(3,end) 1.74s forwards}
+@media (prefers-reduced-motion:reduce){.march,.aim,.shot,.hit,.burst{animation:none!important}}
+"""
+
+
+def pixel_path(rows, x, y, size):
+    parts = []
+    for row_index, row in enumerate(rows):
+        for match in re.finditer("1+", row):
+            run = len(match.group()) * size
+            parts.append(f"M{x + match.start() * size} {y + row_index * size}h{run}v{size}h-{run}z")
+    return "".join(parts)
+
+
+def pixel_text(text, x, y, size):
+    return "".join(pixel_path(PIXEL_FONT[c], x + i * 6 * size, y, size) for i, c in enumerate(text))
+
+
+def arcade_card(position):
+    height = 210
+    lines = ("CHILL, OR", "WANNA PLAY", "A GAME?")
+    copy = "".join(
+        f'<path class="f" {delay(.05 + i * .1)} d="{pixel_text(line, 24, 20 + i * 27, 3)}" fill="#ffffff"/>'
+        for i, line in enumerate(lines)
+    )
+    bots, target = [], ""
+    for row, y in enumerate((119, 139)):
+        for col in range(6):
+            sprite = BOT_OUTLINE if (row + col) % 2 == 0 else BOT_SOLID
+            path = pixel_path(sprite, 44 + col * 36, y, 2)
+            if (row, col) == (1, 3):
+                target = f'<path class="hit" d="{path}" fill="{ACCENT}"/>'
+            else:
+                bots.append(path)
+    sparks = "M153 139h4v4h-4zM165 139h4v4h-4zM153 151h4v4h-4zM165 151h4v4h-4zM159 145h4v4h-4z"
+    body = f"""
+<defs><pattern id="grid" width="8" height="8" patternUnits="userSpaceOnUse"><path d="M8 0H0V8" fill="none" stroke="#1e1e1e"/></pattern>
+<clipPath id="screen"><rect x=".5" y=".5" width="{THIRD_W - 1}" height="{height - 1}" rx="14"/></clipPath></defs>
+<rect x=".5" y=".5" width="{THIRD_W - 1}" height="{height - 1}" rx="14" fill="{INK}"/>
+<g clip-path="url(#screen)"><rect y="108" width="{THIRD_W}" height="102" fill="url(#grid)"/>
+<rect y="107" width="{THIRD_W}" height="1" fill="#3a3a3a"/></g>
+<rect x=".5" y=".5" width="{THIRD_W - 1}" height="{height - 1}" rx="14" fill="none" stroke="#30363d"/>
+<g shape-rendering="crispEdges">
+{copy}
+<path d="{pixel_path(PIXEL_ARROW, round(THIRD_W - 38), 26, 2)}" fill="#ffffff"/>
+<g class="march"><path d="{"".join(bots)}" fill="{ACCENT}"/>{target}</g>
+<rect class="shot" x="160" y="155" width="2" height="6" fill="#ffffff"/>
+<path class="burst" d="{sparks}" fill="#ffffff"/>
+<path class="aim" d="{pixel_path(POINTER, 160, 176, 2)}" fill="#ffffff"/>
+</g>
+"""
+    alt = "Chill, or wanna play a game?"
+    write_svg("play.svg", THIRD_W, height, body, [], alt, left=4 * position, right=8 - 4 * position, extra_css=ARCADE_CSS)
     return alt
 
 
@@ -398,17 +487,12 @@ def join_words(words):
     return words[0] if len(words) == 1 else ", ".join(words[:-1]) + " and " + words[-1]
 
 
-def tiles(config, data, repos):
+def tiles(config, repos):
     base = f'https://github.com/{config["username"]}'
     latest = max(repos, key=lambda r: r["pushed_at"])
     alts = [tile(0, "build", "BUILD", ACCENT, INK, len(repos), plural(len(repos), "project"),
                  f'Public repos, most recently {pretty_name(latest["name"])}.', .05)]
-    stars = sum(r["stars"] for r in repos)
-    top = max(repos, key=lambda r: r["stars"])
-    followers = data["followers"]
-    star_note = f'Led by {pretty_name(top["name"])}. ' if top["stars"] else ""
-    alts.append(tile(1, "community", "COMMUNITY", INK, "#ffffff", stars, plural(stars, "star"),
-                     f'{star_note}{followers} {plural(followers, "follower")} on GitHub.', .2))
+    alts.append(arcade_card(1))
     counts = {}
     for repo in repos:
         if repo["language"]:
@@ -416,7 +500,7 @@ def tiles(config, data, repos):
     languages = sorted(counts, key=lambda l: (-counts[l], l))
     blurb = f"Mostly {languages[0]}" + (f", plus {join_words(languages[1:])}." if len(languages) > 1 else ".")
     alts.append(tile(2, "stack", "STACK", YELLOW, INK, len(languages), plural(len(languages), "language"), blurb, .35))
-    return alts, [f"{base}?tab=repositories", f"{base}?tab=followers", f"{base}?tab=repositories&sort=stargazers"]
+    return alts, [f"{base}?tab=repositories", config.get("game_url"), f"{base}?tab=repositories&sort=stargazers"]
 
 
 def image(src, alt, width="100%"):
@@ -429,8 +513,8 @@ def linked(url, inner):
 
 def write_readme(config, data, hero_alt, tile_alts, tile_urls, picks, repo_alts):
     tile_row = "".join(
-        linked(url, image(f"{name}.svg", alt, "33.333%"))
-        for name, alt, url in zip(("build", "community", "stack"), tile_alts, tile_urls)
+        linked(url, image(f"{name}.svg", alt, "33.333%")) if url else image(f"{name}.svg", alt, "33.333%")
+        for name, alt, url in zip(("build", "play", "stack"), tile_alts, tile_urls)
     )
     repo_row = "".join(
         linked(repo["url"], image(f"repo-{i + 1}.svg", repo_alts[i], "33.333%")) for i, repo in enumerate(picks)
@@ -460,7 +544,7 @@ def main():
     hero_alt = hero(config)
     heatmap(data)
     activity(data)
-    tile_alts, tile_urls = tiles(config, data, repos)
+    tile_alts, tile_urls = tiles(config, repos)
     section_title("dark")
     section_title("light")
     picks = pick_repos(config, repos)

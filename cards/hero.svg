@@ -17,7 +17,7 @@ text{font-variant-numeric:tabular-nums}
 <defs><linearGradient id="shine" gradientUnits="userSpaceOnUse" x1="0" y1="0" x2="600" y2="0" gradientTransform="translate(-600 0)">
 <stop offset="0" stop-color="#111111"/><stop offset=".4" stop-color="#111111"/><stop offset=".5" stop-color="#57200c"/>
 <stop offset=".6" stop-color="#111111"/><stop offset="1" stop-color="#111111"/>
-<animateTransform attributeName="gradientTransform" type="translate" values="-600 0;600 0" keyTimes="0;1" calcMode="spline" keySplines=".45 0 .55 1" dur="2.2s" begin="1s" repeatCount="2" fill="freeze"/>
+<animateTransform attributeName="gradientTransform" type="translate" values="-600 0;600 0" keyTimes="0;1" calcMode="spline" keySplines=".45 0 .55 1" dur="2.2s" begin="1s" fill="freeze"/>
 </linearGradient></defs>
 <rect width="880" height="420" rx="14" fill="#f3f3f1"/>
 <g class="f"><rect class="live" x="48" y="47" width="9" height="9" rx="2" fill="#FA4400"/>

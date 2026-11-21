@@ -14,7 +14,7 @@ text{font-variant-numeric:tabular-nums}
 .n{animation:nudge 1.8s ease-in-out infinite;transform-box:fill-box}
 @media (prefers-reduced-motion:reduce){.r,.f,.g,.p,.live,.n{animation:none!important}}
 </style><g transform="translate(8.000 0)">
-<rect x=".5" y=".5" width="284.3333333333333" height="209" rx="14" fill="#ffc81a"/>
+<rect width="285.3333333333333" height="210" rx="14" fill="#ffc81a"/>
 <g class="f" style="animation-delay:0.35s"><text x="24" y="38" font-family="'Space Grotesk', system-ui, -apple-system, 'Segoe UI', sans-serif" font-size="12" font-weight="600" fill="#111111" letter-spacing="0.08em">STACK</text></g>
 <g transform="translate(247.3 27)"><path class="n" style="animation-delay:1.35s" d="M0 6h12M8 2l4 4-4 4" fill="none" stroke="#111111" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></g>
 <g class="r" style="animation-delay:0.55s"><text x="23" y="112" font-family="'Space Grotesk', system-ui, -apple-system, 'Segoe UI', sans-serif" font-size="40" font-weight="700" fill="#111111" letter-spacing="-0.06em">5 languages</text></g>
